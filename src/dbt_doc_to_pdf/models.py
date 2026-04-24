@@ -1,0 +1,22 @@
+from dataclasses import dataclass, field
+
+
+@dataclass
+class ColumnInfo:
+    name: str
+    description: str
+    data_type: str
+    tests: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ModelInfo:
+    unique_id: str
+    name: str
+    schema: str
+    database: str
+    description: str
+    materialized: str
+    columns: list[ColumnInfo]
+    depends_on: list[str]  # model names (not unique_ids)
+    layer: str
