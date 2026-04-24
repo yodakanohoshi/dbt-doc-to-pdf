@@ -31,8 +31,6 @@ clean-targets:         # directories to be removed by `dbt clean`
 # files using the `{{ config(...) }}` macro.
 models:
   sample_project:
-    example:
-      +materialized: view
     staging:
       +materialized: view
     ecommerce:
