@@ -1,0 +1,63 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: "顧客マスタの生データを整形したステージングモデル"
+    columns:
+      - name: customer_id
+        description: "顧客を一意に識別するID"
+        data_tests:
+          - unique
+          - not_null
+      - name: first_name
+        description: "顧客の名"
+      - name: last_name
+        description: "顧客の姓"
+      - name: email
+        description: "顧客のメールアドレス"
+        data_tests:
+          - not_null
+      - name: created_at
+        description: "顧客レコードの作成日時"
+
+  - name: stg_orders
+    description: "注文データの生データを整形したステージングモデル"
+    columns:
+      - name: order_id
+        description: "注文を一意に識別するID"
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: "注文した顧客のID（stg_customers参照）"
+        data_tests:
+          - not_null
+      - name: status
+        description: "注文ステータス（pending / completed / cancelled）"
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['pending', 'completed', 'cancelled']
+      - name: amount
+        description: "注文合計金額（円）"
+      - name: ordered_at
+        description: "注文日"
+
+  - name: stg_order_items
+    description: "注文明細の生データを整形したステージングモデル"
+    columns:
+      - name: item_id
+        description: "注文明細を一意に識別するID"
+        data_tests:
+          - unique
+          - not_null
+      - name: order_id
+        description: "親注文のID（stg_orders参照）"
+        data_tests:
+          - not_null
+      - name: sku
+        description: "商品のSKUコード"
+      - name: quantity
+        description: "購入数量"
+      - name: unit_price
+        description: "購入時の単価（円）"

@@ -1,0 +1,50 @@
+version: 2
+
+models:
+  - name: customers
+    description: "顧客ごとの購買サマリを含む顧客ディメンションテーブル"
+    columns:
+      - name: customer_id
+        description: "顧客を一意に識別するID"
+        data_tests:
+          - unique
+          - not_null
+      - name: first_name
+        description: "顧客の名"
+      - name: last_name
+        description: "顧客の姓"
+      - name: email
+        description: "顧客のメールアドレス"
+      - name: created_at
+        description: "顧客レコードの作成日時"
+      - name: order_count
+        description: "顧客の累計注文件数"
+      - name: lifetime_value
+        description: "顧客の累計購入金額（円）"
+      - name: first_order_at
+        description: "初回注文日"
+      - name: latest_order_at
+        description: "直近注文日"
+
+  - name: orders
+    description: "注文ヘッダーと明細集計を結合した注文ファクトテーブル"
+    columns:
+      - name: order_id
+        description: "注文を一意に識別するID"
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: "注文した顧客のID"
+        data_tests:
+          - not_null
+      - name: status
+        description: "注文ステータス（pending / completed / cancelled）"
+      - name: amount
+        description: "注文合計金額（円）"
+      - name: ordered_at
+        description: "注文日"
+      - name: item_count
+        description: "注文に含まれる商品種類数"
+      - name: total_quantity
+        description: "注文に含まれる商品の合計数量"
