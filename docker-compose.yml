@@ -1,0 +1,8 @@
+services:
+  dbt-doc-to-pdf:
+    build: .
+    volumes:
+      - ./output:/output
+    environment:
+      OUTPUT: /output/catalog.pdf
+      PROJECT: sample_project
