@@ -1,6 +1,9 @@
 import datetime
 import html
+import re
 from pathlib import Path
+
+import markdown as _md_lib
 
 from .models import ModelInfo
 
@@ -19,6 +22,31 @@ def _c(layer: str) -> str:
 
 def _h(text: object) -> str:
     return html.escape(str(text))
+
+
+def _md(text: str | None) -> str:
+    """Convert Markdown (including math) to HTML.
+
+    Math blocks ($...$ and $$...$$) are extracted before Markdown processing
+    and restored afterwards so MathJax can render them in the browser.
+    """
+    if not text:
+        return ""
+    saved: list[str] = []
+
+    def _save(m: re.Match) -> str:
+        saved.append(m.group(0))
+        return f"MATHPLACEHOLDER{len(saved) - 1}X"
+
+    # Protect display math before inline math to avoid double-matching.
+    text = re.sub(r"\$\$[\s\S]*?\$\$", _save, text)
+    text = re.sub(r"\$[^$\n]+?\$", _save, text)
+
+    result = _md_lib.markdown(text, extensions=["tables", "fenced_code"])
+
+    for i, block in enumerate(saved):
+        result = result.replace(f"MATHPLACEHOLDER{i}X", block)
+    return result
 
 
 def _dir_of(path: str) -> str:
@@ -96,12 +124,13 @@ def generate_html(
                     if col.tests else '<span class="muted">-</span>'
                 )
                 row_class = "alt" if i % 2 == 0 else ""
+                col_desc = _md(col.description) if col.description else '<span class="muted">-</span>'
                 col_rows += (
                     f'<tr class="{row_class}">'
                     f'<td class="num">{i + 1}</td>'
                     f'<td class="colname">{_h(col.name)}</td>'
                     f'<td class="type">{_h(col.data_type or "-")}</td>'
-                    f'<td>{_h(col.description or "-")}</td>'
+                    f'<td class="md-content">{col_desc}</td>'
                     f'<td>{tests_html}</td>'
                     f'</tr>'
                 )
@@ -123,7 +152,7 @@ def generate_html(
       <span class="meta-label">データベース</span><span>{_h(m.database or "-")}</span>
       <span class="meta-label">パス</span><span>{_h(m.path or "-")}</span>
     </div>
-    {('<p class="desc">' + _h(m.description) + '</p>') if m.description else ''}
+    {('<div class="desc md-content">' + _md(m.description) + '</div>') if m.description else ''}
     {col_table}
   </div>
 </div>""")
@@ -177,7 +206,23 @@ td.colname{{font-family:monospace;font-size:12px;font-weight:600}}
 td.type{{font-family:monospace;font-size:12px;color:#7f8c8d}}
 .badge{{display:inline-block;font-size:10px;background:#eaf4fd;color:#2980b9;border:1px solid #aed6f1;border-radius:4px;padding:1px 5px;margin:1px 2px}}
 .muted{{color:#bdc3c7}}
+/* Markdown-rendered descriptions */
+.md-content p{{margin:0 0 6px}}
+.md-content p:last-child{{margin-bottom:0}}
+.md-content strong{{font-weight:700}}
+.md-content em{{font-style:italic}}
+.md-content code{{font-family:monospace;font-size:12px;background:#f0f2f5;padding:1px 4px;border-radius:3px}}
+.md-content pre{{background:#f0f2f5;padding:8px;border-radius:4px;overflow-x:auto;margin:4px 0}}
+.md-content pre code{{background:none;padding:0}}
+.md-content ul,.md-content ol{{padding-left:18px;margin:4px 0}}
+.md-content table{{border-collapse:collapse;font-size:12px;margin:4px 0}}
+.md-content table th,.md-content table td{{border:1px solid #dde1e7;padding:3px 8px}}
+.md-content table th{{background:#f7f9fc;font-weight:600}}
 </style>
+<script>
+MathJax = {{tex: {{inlineMath: [['$','$']], displayMath: [['$$','$$']]}}, options: {{skipHtmlTags: ['script','noscript','style','textarea']}}}};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 </head>
 <body>
 <nav id="sidebar">
