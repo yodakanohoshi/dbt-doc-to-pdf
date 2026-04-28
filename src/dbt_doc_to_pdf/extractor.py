@@ -54,6 +54,7 @@ def extract_models(manifest: dict[str, Any], catalog: dict[str, Any]) -> list[Mo
             columns=columns,
             depends_on=depends_on,
             layer=layer,
+            path=path,
         ))
 
     return sorted(models, key=lambda m: (m.layer, m.name))

@@ -1,19 +1,12 @@
 FROM python:3.13-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libstdc++6 \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-WORKDIR /app
-
 COPY pyproject.toml uv.lock ./
-COPY src/ ./src/
+COPY src/ src/
 
-RUN uv sync --frozen
+RUN uv sync --frozen --no-dev
 
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["uv", "run", "dbt-doc-to-html"]

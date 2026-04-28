@@ -1,18 +1,16 @@
 [project]
 name = "dbt-doc-to-pdf"
-version = "0.1.0"
-description = "Convert dbt docs to PDF data catalog"
+version = "0.2.0"
+description = "Convert dbt docs to a single-file HTML data catalog"
 requires-python = ">=3.13"
 dependencies = [
     "dbt-core>=1.11.8",
     "dbt-duckdb>=1.10.1",
-    "pdfplumber>=0.11.9",
     "pytest>=9.0.3",
-    "reportlab>=4.4.10",
 ]
 
 [project.scripts]
-dbt-doc-to-pdf = "dbt_doc_to_pdf.__main__:main"
+dbt-doc-to-html = "dbt_doc_to_pdf.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
