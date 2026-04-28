@@ -54,7 +54,7 @@ def main() -> None:
     for m in models:
         print(f"  [{m.layer:12s}] {m.name} ({len(m.columns)} columns)  {m.path}")
 
-    generate_html(models, args.output, project_name=args.project)
+    generate_html(models, args.output, project_name=args.project, base_dir=target_dir.parent)
     print(f"\nHTML を生成しました: {args.output}")
 
 

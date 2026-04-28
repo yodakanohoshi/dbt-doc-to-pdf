@@ -1,5 +1,7 @@
+import base64
 import datetime
 import html
+import mimetypes
 import re
 from pathlib import Path
 
@@ -24,11 +26,34 @@ def _h(text: object) -> str:
     return html.escape(str(text))
 
 
-def _md(text: str | None) -> str:
+def _embed_images(html_str: str, base_dir: Path | None) -> str:
+    """Replace local <img src="..."> paths with base64 data URIs."""
+    if not base_dir:
+        return html_str
+
+    def replace_src(m: re.Match) -> str:
+        src = m.group(1)
+        if src.startswith(("http://", "https://", "data:", "//")):
+            return m.group(0)
+        candidates = [base_dir / src, base_dir / "models" / src]
+        img_path = next((p for p in candidates if p.exists()), None)
+        if img_path is None:
+            return m.group(0)
+        mime_type, _ = mimetypes.guess_type(str(img_path))
+        if not mime_type or not mime_type.startswith("image/"):
+            return m.group(0)
+        data = base64.b64encode(img_path.read_bytes()).decode("ascii")
+        return f'src="data:{mime_type};base64,{data}"'
+
+    return re.sub(r'src="([^"]*)"', replace_src, html_str)
+
+
+def _md(text: str | None, base_dir: Path | None = None) -> str:
     """Convert Markdown (including math) to HTML.
 
     Math blocks ($...$ and $$...$$) are extracted before Markdown processing
     and restored afterwards so MathJax can render them in the browser.
+    Local images are embedded as base64 data URIs if base_dir is provided.
     """
     if not text:
         return ""
@@ -46,6 +71,8 @@ def _md(text: str | None) -> str:
 
     for i, block in enumerate(saved):
         result = result.replace(f"MATHPLACEHOLDER{i}X", block)
+
+    result = _embed_images(result, base_dir)
     return result
 
 
@@ -68,6 +95,7 @@ def generate_html(
     models: list[ModelInfo],
     output_path: Path,
     project_name: str = "dbt project",
+    base_dir: Path | None = None,
 ) -> None:
     today = datetime.date.today().strftime("%Y年%m月%d日")
 
@@ -124,7 +152,7 @@ def generate_html(
                     if col.tests else '<span class="muted">-</span>'
                 )
                 row_class = "alt" if i % 2 == 0 else ""
-                col_desc = _md(col.description) if col.description else '<span class="muted">-</span>'
+                col_desc = _md(col.description, base_dir) if col.description else '<span class="muted">-</span>'
                 col_rows += (
                     f'<tr class="{row_class}">'
                     f'<td class="num">{i + 1}</td>'
@@ -152,7 +180,7 @@ def generate_html(
       <span class="meta-label">データベース</span><span>{_h(m.database or "-")}</span>
       <span class="meta-label">パス</span><span>{_h(m.path or "-")}</span>
     </div>
-    {('<div class="desc md-content">' + _md(m.description) + '</div>') if m.description else ''}
+    {('<div class="desc md-content">' + _md(m.description, base_dir) + '</div>') if m.description else ''}
     {col_table}
   </div>
 </div>""")
@@ -218,6 +246,7 @@ td.type{{font-family:monospace;font-size:12px;color:#7f8c8d}}
 .md-content table{{border-collapse:collapse;font-size:12px;margin:4px 0}}
 .md-content table th,.md-content table td{{border:1px solid #dde1e7;padding:3px 8px}}
 .md-content table th{{background:#f7f9fc;font-weight:600}}
+.md-content img{{max-width:100%;height:auto;display:block;margin:6px 0;border-radius:4px}}
 </style>
 <script>
 MathJax = {{tex: {{inlineMath: [['$','$']], displayMath: [['$$','$$']]}}, options: {{skipHtmlTags: ['script','noscript','style','textarea']}}}};
