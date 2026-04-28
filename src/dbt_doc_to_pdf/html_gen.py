@@ -4,6 +4,7 @@ import html
 import mimetypes
 import re
 from pathlib import Path
+from typing import Any
 
 import markdown as _md_lib
 
@@ -96,7 +97,24 @@ def generate_html(
     output_path: Path,
     project_name: str = "dbt project",
     base_dir: Path | None = None,
+    manifest_docs: dict[str, Any] | None = None,
 ) -> None:
+    # Build content -> doc-file directory map for precise image path resolution.
+    # When a description originates from a doc block ({{ doc("name") }}), images
+    # referenced in that block must be resolved relative to the .md file, not base_dir.
+    content_to_doc_dir: dict[str, Path] = {}
+    if base_dir and manifest_docs:
+        for doc in manifest_docs.values():
+            fp: str = doc.get("original_file_path", "")
+            contents: str = doc.get("block_contents", "")
+            if fp and contents:
+                content_to_doc_dir[contents] = (base_dir / fp).parent
+
+    def _resolve_dir(text: str | None) -> Path | None:
+        if text and text in content_to_doc_dir:
+            return content_to_doc_dir[text]
+        return base_dir
+
     today = datetime.date.today().strftime("%Y年%m月%d日")
 
     # Group by full directory path (e.g. "staging", "staging/orders")
@@ -152,7 +170,7 @@ def generate_html(
                     if col.tests else '<span class="muted">-</span>'
                 )
                 row_class = "alt" if i % 2 == 0 else ""
-                col_desc = _md(col.description, base_dir) if col.description else '<span class="muted">-</span>'
+                col_desc = _md(col.description, _resolve_dir(col.description)) if col.description else '<span class="muted">-</span>'
                 col_rows += (
                     f'<tr class="{row_class}">'
                     f'<td class="num">{i + 1}</td>'
@@ -180,7 +198,7 @@ def generate_html(
       <span class="meta-label">データベース</span><span>{_h(m.database or "-")}</span>
       <span class="meta-label">パス</span><span>{_h(m.path or "-")}</span>
     </div>
-    {('<div class="desc md-content">' + _md(m.description, base_dir) + '</div>') if m.description else ''}
+    {('<div class="desc md-content">' + _md(m.description, _resolve_dir(m.description)) + '</div>') if m.description else ''}
     {col_table}
   </div>
 </div>""")
