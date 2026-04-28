@@ -12,13 +12,6 @@ _LAYER_COLORS: dict[str, str] = {
 }
 _LAYER_ORDER = ["staging", "intermediate", "marts"]
 
-_BOX_W = 200
-_HEADER_H = 28
-_ROW_H = 18
-_PAD_V = 8
-_COL_GAP = 80
-_V_GAP = 20
-
 
 def _c(layer: str) -> str:
     return _LAYER_COLORS.get(layer, _LAYER_COLORS["other"])
@@ -28,157 +21,19 @@ def _h(text: object) -> str:
     return html.escape(str(text))
 
 
-def _box_h(model: ModelInfo) -> int:
-    return _HEADER_H + len(model.columns) * _ROW_H + _PAD_V
+def _dir_of(path: str) -> str:
+    parts = path.rsplit("/", 1)
+    return parts[0] if len(parts) > 1 else path.split(".")[0]
 
 
-def _build_er_svg(models: list[ModelInfo]) -> str:
-    if not models:
-        return ""
-
-    by_name = {m.name: m for m in models}
-
-    # Determine layer column order
-    seen_layers: list[str] = []
-    for m in models:
-        if m.layer not in seen_layers:
-            seen_layers.append(m.layer)
-    ordered_layers = [l for l in _LAYER_ORDER if l in seen_layers]
-    for l in seen_layers:
-        if l not in ordered_layers:
-            ordered_layers.append(l)
-
-    col_x: dict[str, float] = {}
-    x = 20.0
-    for layer in ordered_layers:
-        col_x[layer] = x
-        x += _BOX_W + _COL_GAP
-
-    # Assign y positions per column (y-down SVG coords)
-    positions: dict[str, tuple[float, float]] = {}  # name -> (x, y_top)
-    col_cursor: dict[str, float] = {l: 60.0 for l in ordered_layers}
-
-    # First pass: layers in order
-    for layer in ordered_layers:
-        layer_models = [m for m in models if m.layer == layer]
-        lx = col_x[layer]
-        y = col_cursor[layer]
-        for m in layer_models:
-            positions[m.name] = (lx, y)
-            y += _box_h(m) + _V_GAP
-        col_cursor[layer] = y
-
-    # Nudge downstream model y to align with its dependencies' midpoints
-    for layer in ordered_layers[1:]:
-        layer_models = [m for m in models if m.layer == layer]
-        sorted_models = sorted(layer_models, key=lambda m: positions[m.name][1])
-        for m in sorted_models:
-            dep_mids = []
-            for dep in m.depends_on:
-                if dep in positions and dep in by_name:
-                    dy = positions[dep][1]
-                    dep_mids.append(dy + _box_h(by_name[dep]) / 2)
-            if dep_mids:
-                target_mid = sum(dep_mids) / len(dep_mids)
-                positions[m.name] = (positions[m.name][0], target_mid - _box_h(m) / 2)
-
-        # Fix overlaps (top-down)
-        sorted_models = sorted(layer_models, key=lambda m: positions[m.name][1])
-        for i in range(1, len(sorted_models)):
-            prev = sorted_models[i - 1]
-            curr = sorted_models[i]
-            min_y = positions[prev.name][1] + _box_h(prev) + _V_GAP
-            if positions[curr.name][1] < min_y:
-                positions[curr.name] = (positions[curr.name][0], min_y)
-
-    if not positions:
-        return ""
-
-    total_w = x
-    total_h = max(py + _box_h(by_name[n]) for n, (_, py) in positions.items()) + 40
-
-    parts: list[str] = []
-    parts.append(
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{total_w:.0f}" height="{total_h:.0f}" '
-        f'style="font-family:sans-serif;background:#fafafa;">'
-    )
-
-    # Layer labels
-    for layer in ordered_layers:
-        lx = col_x[layer]
-        parts.append(
-            f'<text x="{lx + _BOX_W / 2:.0f}" y="40" text-anchor="middle" '
-            f'font-size="13" font-weight="bold" fill="{_c(layer)}">{_h(layer)}</text>'
-        )
-
-    # Arrows (draw behind boxes)
-    for m in models:
-        mx, my = positions[m.name]
-        m_mid_y = my + _box_h(m) / 2
-        for dep in m.depends_on:
-            if dep not in positions or dep not in by_name:
-                continue
-            dx, dy = positions[dep]
-            dep_mid_y = dy + _box_h(by_name[dep]) / 2
-            x1 = dx + _BOX_W
-            y1 = dep_mid_y
-            x2 = mx
-            y2 = m_mid_y
-            # Arrow line
-            parts.append(
-                f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
-                f'stroke="#888" stroke-width="1.5" marker-end="url(#arrow)"/>'
-            )
-
-    # Arrowhead marker
-    parts.insert(1,
-        '<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">'
-        '<path d="M0,0 L0,6 L8,3 z" fill="#888"/>'
-        '</marker></defs>'
-    )
-
-    # Boxes
-    for m in models:
-        mx, my = positions[m.name]
-        bh = _box_h(m)
-        color = _c(m.layer)
-        # Shadow
-        parts.append(
-            f'<rect x="{mx + 3:.0f}" y="{my + 3:.0f}" width="{_BOX_W}" height="{bh}" '
-            f'rx="4" fill="#ccc" opacity="0.4"/>'
-        )
-        # Box background
-        parts.append(
-            f'<rect x="{mx:.0f}" y="{my:.0f}" width="{_BOX_W}" height="{bh}" '
-            f'rx="4" fill="#f4f6f7" stroke="#bdc3c7" stroke-width="0.8"/>'
-        )
-        # Header
-        parts.append(
-            f'<rect x="{mx:.0f}" y="{my:.0f}" width="{_BOX_W}" height="{_HEADER_H}" '
-            f'rx="4" fill="{color}"/>'
-            f'<rect x="{mx:.0f}" y="{my + _HEADER_H - 4:.0f}" width="{_BOX_W}" height="4" fill="{color}"/>'
-        )
-        # Model name
-        name_y = my + _HEADER_H / 2 + 5
-        parts.append(
-            f'<text x="{mx + _BOX_W / 2:.0f}" y="{name_y:.0f}" text-anchor="middle" '
-            f'font-size="11" font-weight="bold" fill="white">{_h(m.name)}</text>'
-        )
-        # Columns
-        for i, col in enumerate(m.columns):
-            row_y = my + _HEADER_H + i * _ROW_H
-            if i % 2 == 0:
-                parts.append(
-                    f'<rect x="{mx:.0f}" y="{row_y:.0f}" width="{_BOX_W}" height="{_ROW_H}" fill="#eaf0fb" opacity="0.6"/>'
-                )
-            type_txt = f"{col.name}" + (f" : {col.data_type}" if col.data_type else "")
-            text_y = row_y + _ROW_H - 5
-            parts.append(
-                f'<text x="{mx + 8:.0f}" y="{text_y:.0f}" font-size="9" fill="#2c3e50">{_h(type_txt)}</text>'
-            )
-
-    parts.append("</svg>")
-    return "\n".join(parts)
+def _sorted_dirs(dirs: list[str]) -> list[str]:
+    def sort_key(d: str) -> tuple[int, str]:
+        top = d.split("/")[0]
+        try:
+            return (_LAYER_ORDER.index(top), d)
+        except ValueError:
+            return (len(_LAYER_ORDER), d)
+    return sorted(dirs, key=sort_key)
 
 
 def generate_html(
@@ -188,40 +43,52 @@ def generate_html(
 ) -> None:
     today = datetime.date.today().strftime("%Y年%m月%d日")
 
-    # Group by layer
-    layers: dict[str, list[ModelInfo]] = {}
+    # Group by full directory path (e.g. "staging", "staging/orders")
+    dir_groups: dict[str, list[ModelInfo]] = {}
     for m in models:
-        layers.setdefault(m.layer, []).append(m)
+        d = _dir_of(m.path)
+        dir_groups.setdefault(d, []).append(m)
 
-    layer_order = [l for l in _LAYER_ORDER if l in layers]
-    for l in layers:
-        if l not in layer_order:
-            layer_order.append(l)
+    dir_order = _sorted_dirs(list(dir_groups.keys()))
 
     sidebar_items: list[str] = []
-    for layer in layer_order:
-        sidebar_items.append(
-            f'<div class="layer-label" style="color:{_c(layer)}">{_h(layer)}</div>'
-        )
-        for m in layers[layer]:
+    prev_top: str = ""
+    for d in dir_order:
+        top = d.split("/")[0]
+        if top != prev_top:
+            sidebar_items.append(
+                f'<div class="layer-label" style="color:{_c(top)}">{_h(top)}</div>'
+            )
+            prev_top = top
+        if "/" in d:
+            sub = d.split("/", 1)[1]
+            sidebar_items.append(
+                f'<div class="subdir-label">{_h(sub)}</div>'
+            )
+        for m in dir_groups[d]:
             sidebar_items.append(
                 f'<a class="nav-item" href="#model-{_h(m.name)}" '
                 f'data-search="{_h(m.name.lower())}">{_h(m.name)}</a>'
             )
 
     model_sections: list[str] = []
-    for layer in layer_order:
-        model_sections.append(
-            f'<div class="layer-section-header" style="border-left:4px solid {_c(layer)};padding-left:12px">'
-            f'<h2 style="color:{_c(layer)};margin:0">{_h(layer)}</h2></div>'
-        )
-        for m in layers[layer]:
-            depends_html = (
-                '<div class="depends">依存: ' +
-                ", ".join(f'<a href="#model-{_h(d)}">{_h(d)}</a>' for d in m.depends_on) +
-                "</div>"
-                if m.depends_on else ""
+    prev_top = ""
+    for d in dir_order:
+        top = d.split("/")[0]
+        color = _c(top)
+        if top != prev_top:
+            model_sections.append(
+                f'<div class="layer-section-header" style="border-left:4px solid {color};padding-left:12px">'
+                f'<h2 style="color:{color};margin:0">{_h(top)}</h2></div>'
             )
+            prev_top = top
+        if "/" in d:
+            sub = d.split("/", 1)[1]
+            model_sections.append(
+                f'<div class="subdir-section-header" style="border-left:3px solid {color};padding-left:10px;margin-left:8px">'
+                f'<h3 style="color:{color};margin:0;font-size:13px;opacity:.85">{_h(sub)}</h3></div>'
+            )
+        for m in dir_groups[d]:
             col_rows = ""
             for i, col in enumerate(m.columns):
                 tests_html = (
@@ -257,19 +124,9 @@ def generate_html(
       <span class="meta-label">パス</span><span>{_h(m.path or "-")}</span>
     </div>
     {('<p class="desc">' + _h(m.description) + '</p>') if m.description else ''}
-    {depends_html}
     {col_table}
   </div>
 </div>""")
-
-    er_svg = _build_er_svg(models)
-    er_section = f"""
-<section id="er-diagram">
-  <h2>ER図 / データリネージ</h2>
-  <div class="er-container">
-    {er_svg}
-  </div>
-</section>""" if er_svg else ""
 
     html_content = f"""<!DOCTYPE html>
 <html lang="ja">
@@ -289,6 +146,7 @@ a{{color:inherit;text-decoration:none}}
 #search{{margin:10px 12px;padding:7px 10px;border-radius:6px;border:1px solid #3d5166;background:#1e2d3d;color:#ecf0f1;font-size:13px;width:calc(100% - 24px);outline:none}}
 #search::placeholder{{color:#7f8c8d}}
 .layer-label{{padding:10px 16px 4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;opacity:.9}}
+.subdir-label{{padding:6px 16px 2px 28px;font-size:10px;font-weight:600;color:#7f8c8d;letter-spacing:.03em}}
 .nav-item{{display:block;padding:5px 16px 5px 24px;font-size:13px;color:#bdc3c7;border-left:3px solid transparent;transition:all .15s}}
 .nav-item:hover,.nav-item.active{{background:#1e2d3d;color:#fff;border-left-color:#3498db}}
 /* Main */
@@ -297,8 +155,9 @@ a{{color:inherit;text-decoration:none}}
 #topbar h2{{font-size:16px;font-weight:600;color:#2c3e50}}
 .topbar-sub{{font-size:12px;color:#7f8c8d}}
 #content{{padding:28px;display:flex;flex-direction:column;gap:32px}}
-/* Layer header */
+/* Layer / subdir headers */
 .layer-section-header{{margin-bottom:4px}}
+.subdir-section-header{{margin-bottom:4px;margin-top:8px}}
 /* Model card */
 .model-card{{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}}
 .model-header{{padding:12px 18px;display:flex;align-items:center;justify-content:space-between}}
@@ -308,8 +167,6 @@ a{{color:inherit;text-decoration:none}}
 .meta-grid{{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;font-size:12px;margin-bottom:12px;color:#555}}
 .meta-label{{color:#95a5a6;font-weight:600}}
 .desc{{font-size:13px;color:#555;margin-bottom:10px;line-height:1.5}}
-.depends{{font-size:12px;color:#7f8c8d;margin-bottom:10px}}
-.depends a{{color:#3498db;text-decoration:underline}}
 /* Column table */
 .col-table{{width:100%;border-collapse:collapse;font-size:13px}}
 .col-table th{{background:#2c3e50;color:#fff;padding:6px 10px;text-align:left;font-weight:600;font-size:12px}}
@@ -320,10 +177,6 @@ td.colname{{font-family:monospace;font-size:12px;font-weight:600}}
 td.type{{font-family:monospace;font-size:12px;color:#7f8c8d}}
 .badge{{display:inline-block;font-size:10px;background:#eaf4fd;color:#2980b9;border:1px solid #aed6f1;border-radius:4px;padding:1px 5px;margin:1px 2px}}
 .muted{{color:#bdc3c7}}
-/* ER section */
-#er-diagram{{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px 18px}}
-#er-diagram h2{{font-size:15px;font-weight:600;color:#2c3e50;margin-bottom:14px}}
-.er-container{{overflow-x:auto}}
 </style>
 </head>
 <body>
@@ -335,7 +188,6 @@ td.type{{font-family:monospace;font-size:12px;color:#7f8c8d}}
   <input id="search" type="search" placeholder="モデルを検索…" oninput="filterNav(this.value)">
   <div id="nav-list">
     {"".join(sidebar_items)}
-    <a class="nav-item" href="#er-diagram">ER図 / リネージ</a>
   </div>
 </nav>
 <div id="main">
@@ -345,7 +197,6 @@ td.type{{font-family:monospace;font-size:12px;color:#7f8c8d}}
   </div>
   <div id="content">
     {"".join(model_sections)}
-    {er_section}
   </div>
 </div>
 <script>
@@ -356,8 +207,7 @@ function filterNav(q) {{
     a.style.display = (!q || s.includes(q)) ? '' : 'none';
   }});
 }}
-// Highlight active section on scroll
-var cards = document.querySelectorAll('.model-card, #er-diagram');
+var cards = document.querySelectorAll('.model-card');
 var navLinks = document.querySelectorAll('.nav-item');
 function onScroll() {{
   var scrollY = window.scrollY + 80;

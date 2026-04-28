@@ -38,12 +38,6 @@ def extract_models(manifest: dict[str, Any], catalog: dict[str, Any]) -> list[Mo
         path = node.get("path", "")
         layer = path.split("/")[0] if "/" in path else "other"
 
-        depends_on = [
-            dep.split(".")[-1]
-            for dep in node.get("depends_on", {}).get("nodes", [])
-            if dep.startswith("model.")
-        ]
-
         models.append(ModelInfo(
             unique_id=uid,
             name=node["name"],
@@ -52,7 +46,6 @@ def extract_models(manifest: dict[str, Any], catalog: dict[str, Any]) -> list[Mo
             description=node.get("description", ""),
             materialized=node.get("config", {}).get("materialized", ""),
             columns=columns,
-            depends_on=depends_on,
             layer=layer,
             path=path,
         ))

@@ -57,18 +57,6 @@ class TestColumnInfo:
             assert test_name in html_text, f"テスト名 '{test_name}' が HTML にありません"
 
 
-class TestLineage:
-    def test_er_section_in_html(self, html_text):
-        assert "er-diagram" in html_text, "ER 図セクションが HTML にありません"
-        assert "<svg" in html_text, "SVG が HTML に埋め込まれていません"
-
-    def test_dependency_models_present(self, html_text, models):
-        all_deps = {dep for m in models for dep in m.depends_on}
-        all_names = {m.name for m in models}
-        for dep in all_deps:
-            assert dep in all_names, f"依存モデル '{dep}' が models リストに存在しません"
-            assert dep in html_text, f"依存モデル '{dep}' が HTML に見つかりません"
-
 
 class TestMetadataConsistency:
     def test_column_count_consistency(self, models):

@@ -65,12 +65,6 @@ def test_tests_attached_to_columns(models):
     assert "not_null" in orders_cols["customer_id"].tests
 
 
-def test_depends_on(models):
-    by_name = {m.name: m for m in models}
-    assert set(by_name["customers"].depends_on) == {"stg_customers", "stg_orders"}
-    assert set(by_name["orders"].depends_on) == {"stg_orders", "stg_order_items"}
-    assert by_name["stg_customers"].depends_on == []
-
 
 def test_materialization(models):
     by_name = {m.name: m for m in models}

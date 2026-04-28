@@ -18,6 +18,5 @@ class ModelInfo:
     description: str
     materialized: str
     columns: list[ColumnInfo]
-    depends_on: list[str]  # model names (not unique_ids)
     layer: str
     path: str  # relative path from models dir, e.g. "staging/stg_orders.sql"
