@@ -30,20 +30,26 @@ uv run dbt-doc-to-html \
 docker build -t dbt-doc-to-html .
 
 # 実行 (dbt target ディレクトリと出力先をマウント)
+# --base-dir でプロジェクトルートを指定すると、docs の .md ファイルから
+# 参照される画像を HTML に埋め込める。画像が不要なら省略可。
 docker run --rm \
   -v /path/to/your/dbt/target:/target:ro \
+  -v /path/to/your/dbt/project:/project:ro \
   -v $(pwd):/out \
   dbt-doc-to-html \
   --target-dir /target \
+  --base-dir /project \
   --output /out/catalog.html \
   --project my_project
 
 # --dir で絞り込む場合
 docker run --rm \
   -v /path/to/your/dbt/target:/target:ro \
+  -v /path/to/your/dbt/project:/project:ro \
   -v $(pwd):/out \
   dbt-doc-to-html \
   --target-dir /target \
+  --base-dir /project \
   --dir staging \
   --output /out/staging.html
 ```

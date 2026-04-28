@@ -32,12 +32,24 @@ def main() -> None:
         default=None,
         help="対象モデルのパスプレフィックス (例: staging, models/marts)",
     )
+    parser.add_argument(
+        "--base-dir",
+        type=Path,
+        default=None,
+        help=(
+            "画像解決の起点となる dbt プロジェクトルートのパス。"
+            "省略時は --target-dir の親ディレクトリを使用。"
+            "Docker 実行時はプロジェクトをマウントしてこの引数で指定する。"
+        ),
+    )
     args = parser.parse_args()
 
     target_dir: Path = args.target_dir
     if not target_dir.exists():
         print(f"ERROR: target ディレクトリが見つかりません: {target_dir}", file=sys.stderr)
         sys.exit(1)
+
+    base_dir: Path = args.base_dir if args.base_dir is not None else target_dir.parent
 
     manifest = load_manifest(target_dir)
     catalog = load_catalog(target_dir)
@@ -58,7 +70,7 @@ def main() -> None:
         models,
         args.output,
         project_name=args.project,
-        base_dir=target_dir.parent,
+        base_dir=base_dir,
         manifest_docs=manifest.get("docs", {}),
     )
     print(f"\nHTML を生成しました: {args.output}")
